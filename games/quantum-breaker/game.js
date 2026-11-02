@@ -1345,7 +1345,12 @@ class QuantumBreaker {
       return false;
     }
 
-    // Brick destroyed!
+    // Brick destroyed! Remove it first so a neighbouring explosive can't hit it again
+    const idx = this.bricks.indexOf(brick);
+    if (idx !== -1) {
+      this.bricks.splice(idx, 1);
+    }
+
     this.bricksDestroyed++;
     const pts = brick.points * this.combo;
     this.score += pts;
@@ -1403,23 +1408,17 @@ class QuantumBreaker {
       const bx = brick.x + brick.w / 2;
       const by = brick.y + brick.h / 2;
 
-      for (let i = this.bricks.length - 1; i >= 0; i--) {
-        const other = this.bricks[i];
-        if (other === brick || other.type === 'UNBREAKABLE') continue;
+      // Fixed list: the chain removes bricks from this.bricks as it spreads
+      const nearby = this.bricks.filter(other => {
+        if (other.type === 'UNBREAKABLE') return false;
         const ox = other.x + other.w / 2;
         const oy = other.y + other.h / 2;
-        const dist = Math.hypot(ox - bx, oy - by);
+        return Math.hypot(ox - bx, oy - by) <= radius;
+      });
 
-        if (dist <= radius) {
-          this.hitBrick(other, null);
-        }
+      for (const other of nearby) {
+        if (other.hp > 0) this.hitBrick(other, null);
       }
-    }
-
-    // Remove from array
-    const idx = this.bricks.indexOf(brick);
-    if (idx !== -1) {
-      this.bricks.splice(idx, 1);
     }
 
     this.checkStageClear();
@@ -1428,6 +1427,9 @@ class QuantumBreaker {
   }
 
   checkStageClear() {
+    // A chain reaction lands here once per brick; only the first clear counts
+    if (this.state !== 'PLAYING') return;
+
     // Check if any breakable bricks remain
     const breakables = this.bricks.filter(b => b.type !== 'UNBREAKABLE');
     if (breakables.length === 0) {
